@@ -170,20 +170,34 @@ static void
 load_module_dir (const char *dirname)
 {
 	GDir *dir;
-	
+	static GHashTable *loaded_basenames = NULL;
+
+	if (loaded_basenames == NULL) {
+		loaded_basenames = g_hash_table_new_full (g_str_hash, g_str_equal,
+		                                          g_free, NULL);
+	}
+
 	dir = g_dir_open (dirname, 0, NULL);
-	
+
 	if (dir) {
 		const char *name;
-		
+
 		while ((name = g_dir_read_name (dir))) {
 			if (g_str_has_suffix (name, "." G_MODULE_SUFFIX)) {
 				char *filename;
 
-				filename = g_build_filename (dirname, 
-							     name, 
+				/* Skip if we've already loaded a module with this
+				 * basename from an earlier directory. This lets us
+				 * safely search a fallback location without loading
+				 * the same extension twice. */
+				if (g_hash_table_contains (loaded_basenames, name))
+					continue;
+
+				filename = g_build_filename (dirname,
+							     name,
 							     NULL);
                 nemo_module_load_file (filename);
+				g_hash_table_add (loaded_basenames, g_strdup (name));
 				g_free (filename);
 			}
 		}
@@ -214,6 +228,19 @@ nemo_module_setup (void)
 		initialized = TRUE;
 		
 		load_module_dir (NEMO_EXTENSIONDIR);
+
+		/* Also search the distro's system extension directory. Our
+		 * builds are typically installed under /usr/local, but on
+		 * Arch/Debian the nemo-fileroller (right-click Extract Here /
+		 * Compress...), nemo-preview, nemo-python, etc. extensions are
+		 * shipped by the distro under /usr/lib/nemo/extensions-3.0.
+		 * Without this we silently lose all of them when a user
+		 * installs a locally-built nemo. Duplicates by basename are
+		 * skipped inside load_module_dir(). */
+		if (g_strcmp0 (NEMO_EXTENSIONDIR,
+		               "/usr/lib/nemo/extensions-3.0") != 0) {
+			load_module_dir ("/usr/lib/nemo/extensions-3.0");
+		}
 
 		eel_debug_call_at_shutdown (free_module_objects);
 	}

@@ -228,6 +228,27 @@ nemo_archive_mounter_is_archive (const gchar *mime_type)
     return detect_archive_type (mime_type) != ARCHIVE_TYPE_UNKNOWN;
 }
 
+gboolean
+nemo_archive_mounter_can_mount (const gchar *mime_type)
+{
+    ArchiveType type = detect_archive_type (mime_type);
+
+    switch (type) {
+        case ARCHIVE_TYPE_ZIP:
+            return check_tool_available ("fuse-zip");
+        case ARCHIVE_TYPE_TAR:
+        case ARCHIVE_TYPE_TAR_GZ:
+        case ARCHIVE_TYPE_TAR_BZ2:
+        case ARCHIVE_TYPE_TAR_XZ:
+        case ARCHIVE_TYPE_7Z:
+        case ARCHIVE_TYPE_RAR:
+            return check_tool_available ("archivemount");
+        case ARCHIVE_TYPE_UNKNOWN:
+        default:
+            return FALSE;
+    }
+}
+
 gchar *
 nemo_archive_mounter_mount (const gchar *archive_path,
                             const gchar *mime_type,

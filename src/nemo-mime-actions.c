@@ -2260,18 +2260,22 @@ nemo_mime_activate_files (GtkWindow *parent_window,
 
 	DEBUG_FILES (files, "Calling activate_files() with files:");
 
-	/* Check if this is a single archive file that should be mounted and browsed */
+	/* Check if this is a single archive file that should be mounted and browsed.
+	 * We only intercept when a working FUSE mount helper is present on PATH;
+	 * otherwise fall through to the normal default-handler launch (file-roller
+	 * etc.) so the user isn't left with a broken "Archive Opening Failed"
+	 * dialog when fuse-zip/archivemount aren't installed. */
 	if (g_list_length (files) == 1 && slot != NULL) {
 		NemoFile *file = files->data;
 		gchar *mime_type = nemo_file_get_mime_type (file);
-		
-		if (mime_type != NULL && nemo_archive_mounter_is_archive (mime_type)) {
+
+		if (mime_type != NULL && nemo_archive_mounter_can_mount (mime_type)) {
 			gchar *archive_path = nemo_file_get_path (file);
-			
+
 			if (archive_path != NULL) {
 				GError *error = NULL;
 				gchar *mount_point = nemo_archive_mounter_mount (archive_path, mime_type, &error);
-				
+
 				if (mount_point != NULL) {
 					/* Open the mounted archive location in Nemo */
 					GFile *location = g_file_new_for_path (mount_point);
@@ -2282,14 +2286,14 @@ nemo_mime_activate_files (GtkWindow *parent_window,
 					g_free (mime_type);
 					return;
 				} else {
-					/* Show error dialog if mounting failed */
+					/* Mount helper was present but failed on this specific
+					 * archive. Log it and fall through to the default
+					 * handler instead of stopping the user from opening
+					 * the file at all. */
 					if (error != NULL) {
-						gchar *display_name = nemo_file_get_display_name (file);
-						gchar *message = g_strdup_printf (_("Could not open archive \"%s\": %s"),
-						                                 display_name, error->message);
-						eel_show_error_dialog (_("Archive Opening Failed"), message, parent_window);
-						g_free (message);
-						g_free (display_name);
+						g_warning ("Archive mount failed for %s: %s; "
+						           "falling back to default handler.",
+						           archive_path, error->message);
 						g_error_free (error);
 					}
 					g_free (archive_path);
