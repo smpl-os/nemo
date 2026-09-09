@@ -17,6 +17,12 @@ G_BEGIN_DECLS
 
 gboolean nemo_archive_mounter_is_archive (const gchar *mime_type);
 
+/* Returns TRUE only if this MIME type is an archive AND the required
+ * FUSE mount helper (fuse-zip / archivemount) is available on PATH.
+ * Callers should skip the mount-and-browse interception when this
+ * returns FALSE and fall back to the default GIO handler. */
+gboolean nemo_archive_mounter_can_mount (const gchar *mime_type);
+
 gchar *nemo_archive_mounter_mount (const gchar *archive_path,
                                    const gchar *mime_type,
                                    GError **error);
